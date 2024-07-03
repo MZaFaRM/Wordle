@@ -296,14 +296,20 @@ def train_ai(n):
 
 
 def main():
-    ai = train_ai(99999999)
-    wordle = Wordle()
-    while not wordle.terminal:
-        old_state = ai.get_state(wordle)
-        guess = ai.choose_action(old_state)
+    ai = train_ai(1000)
 
-        print("Guess:", guess)
-        wordle.play(guess)
+    wordle = Wordle()
+    while True:
+        while not wordle.terminal:
+            old_state = ai.get_state(wordle)
+            guess = ai.choose_action(old_state)
+
+            print("Guess:", guess)
+            wordle.play(guess)
+        if not wordle.win:
+            break
+        else:
+            wordle = Wordle()
 
 
 main()
