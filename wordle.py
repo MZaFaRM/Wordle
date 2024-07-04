@@ -4,6 +4,8 @@ import colorama
 from colorama import Fore
 from string import ascii_lowercase
 from functools import lru_cache
+import matplotlib.pyplot as plt
+import numpy as np
 
 colorama.init(autoreset=True)
 
@@ -24,9 +26,9 @@ class Wordle:
         self.chance_remaining = 6
         self.verbose = verbose
 
-        self.guessed_correct = set()
-        self.guessed_wrong = set()
-        self.guessed_wrong_index = set()
+        self.correct_guesses = set()
+        self.wrong_guesses = set()
+        self.wrong_index_guesses = set()
 
         self.words = ALL_WORDS
         if self.verbose:
@@ -41,15 +43,15 @@ class Wordle:
         self.chance_remaining -= 1
         for i in range(5):
             if string[i] == self.word[i]:
-                self.guessed_correct.add(string[i])
+                self.correct_guesses.add(string[i])
                 with contextlib.suppress(KeyError):
-                    self.guessed_wrong_index.remove(string[i])
+                    self.wrong_index_guesses.remove(string[i])
 
             elif string[i] in self.word:
-                if string[i] not in self.guessed_correct:
-                    self.guessed_wrong_index.add(string[i])
+                if string[i] not in self.correct_guesses:
+                    self.wrong_index_guesses.add(string[i])
             else:
-                self.guessed_wrong.add(string[i])
+                self.wrong_guesses.add(string[i])
 
     def display(self, string=""):
         if self.verbose:
@@ -74,11 +76,11 @@ class Wordle:
 
             output.append("\n")
             for i in ascii_lowercase:
-                if i in self.guessed_correct:
+                if i in self.correct_guesses:
                     output.append(Fore.GREEN + i)
-                elif i in self.guessed_wrong_index:
+                elif i in self.wrong_index_guesses:
                     output.append(Fore.YELLOW + i)
-                elif i in self.guessed_wrong:
+                elif i in self.wrong_guesses:
                     output.append(Fore.BLACK + i)
                 else:
                     output.append(Fore.WHITE + i)
@@ -116,10 +118,14 @@ class Wordle:
 
 
 class WordleAI:
-    def __init__(self, alpha=0.5, epsilon=0.1) -> None:
+    def __init__(
+        self, alpha=0.5, epsilon=0.3, epsilon_decay=0.99, min_epsilon=0.1
+    ) -> None:
         self.q = dict()
         self.alpha = alpha
         self.epsilon = epsilon
+        self.epsilon_decay = epsilon_decay
+        self.min_epsilon = min_epsilon
 
     def update(self, old_state, action, new_state, reward):
         """
@@ -223,11 +229,9 @@ class WordleAI:
 
     def get_reward(self, old_state, new_state, terminal, win=False):
         reward = 0
-        reward += (len(new_state.correct_guesses) - len(old_state.correct_guesses)) * 10
-        reward += (
-            len(new_state.wrong_index_guesses) - len(old_state.wrong_index_guesses)
-        ) * 5
-        reward -= (len(new_state.wrong_guesses) - len(old_state.wrong_guesses)) * 5
+        reward += (len(new_state[0]) - len(old_state[0])) * 50
+        reward += (len(new_state[1]) - len(old_state[1])) * 5
+        reward -= (len(new_state[2]) - len(old_state[2])) * 5
         if terminal:
             if win:
                 reward += 100
@@ -236,8 +240,52 @@ class WordleAI:
         return reward
 
 
+class DQNGraph:
+    def __init__(self) -> None:
+        self.memory = []
+        self.games_won = 0
+        self.games_lost = 0
+
+    def draw_graph(self, games_won, games_lost):
+
+        self.memory.append((games_won, games_lost))
+        self.games_won += games_won
+        self.games_lost += games_lost
+
+        N = len(self.memory)
+        ind = np.arange(N)
+        width = 0.25
+
+        xvals = [item[0] for item in self.memory]
+        bar1 = plt.bar(ind, xvals, width, color="g")
+
+        yvals = [item[1] for item in self.memory]
+        bar2 = plt.bar(ind + width, yvals, width, color="r")
+
+        plt.xlabel("Batch Number")
+        plt.ylabel("Scores")
+        plt.title("Wordle Score")
+
+        plt.xticks(ind + width, range(N))
+        plt.legend(
+            (bar1, bar2),
+            (f"Games Won: {self.games_won}", f"Games Lost: {self.games_lost}"),
+        )
+        plt.savefig(f"DQN-Batch_{len(self.memory)}.png")
+        print(f"DQN-Batch_{len(self.memory)}.png Saved!")
+
+
 def train_ai(n):
     ai = WordleAI()
+    graph = DQNGraph()
+
+    games_won = 0
+    games_lost = 0
+
+    words = {}
+
+    f = open("words_tried.txt", "w")
+
     for i in range(n):
         print("Playing game " + str(i))
         wordle = Wordle(verbose=False)
@@ -247,6 +295,7 @@ def train_ai(n):
             guess = ai.choose_action(old_state, epsilon=True)
 
             wordle.play(guess)
+            f.write(guess + "\t")
             new_state = ai.get_state(wordle)
             reward = ai.get_reward(
                 old_state,
@@ -254,9 +303,43 @@ def train_ai(n):
                 terminal=wordle.terminal,
                 win=wordle.win,
             )
+            f.write(f"Old: {str(old_state)} New: {str(new_state)} Reward: {reward}\n")
 
+            words[(guess, wordle.chance_remaining)] = (
+                words.get((guess, wordle.chance_remaining), 0) + 1
+            )
             ai.update(old_state, guess, new_state, reward)
 
+        if ai.epsilon > ai.min_epsilon:
+            ai.epsilon *= ai.epsilon_decay
+
+        if i % 100 == 0:
+            graph.draw_graph(games_won, games_lost)
+            games_won = 0
+            games_lost = 0
+
+        if wordle.win:
+            games_won += 1
+        else:
+            games_lost += 1
+
+        f.write("Game Ended.\n")
+    f.close()
+    print("Most used words: ")
+
+    with open("used_words.txt", "w") as t:
+        words_ordered = sorted(words.keys(), key=lambda word: words[word], reverse=True)
+        for i in range(5, -1, -1):
+            t.write(f"{i}:\n")
+            data = [
+                word[0] for word in filter(lambda word: word[1] == i, words_ordered)
+            ]
+
+            h = ""
+            for j in data:
+                t.write(j + " : " + str(words[(j, i)]) + "\n")
+
+    print(words)
     return ai
 
 
@@ -264,6 +347,7 @@ def main():
     ai = train_ai(1000)
 
     wordle = Wordle()
+
     while True:
         while not wordle.terminal:
             old_state = ai.get_state(wordle)
