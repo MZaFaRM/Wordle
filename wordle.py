@@ -119,9 +119,9 @@ class State:
     def __init__(
         self, correct_guesses, wrong_index_guesses, wrong_guesses, chances_left
     ):
-        self.correct_guesses = tuple(correct_guesses)
-        self.wrong_index_guesses = tuple(wrong_index_guesses)
-        self.wrong_guesses = tuple(wrong_guesses)
+        self.correct_guesses = tuple(sorted(correct_guesses))
+        self.wrong_index_guesses = tuple(sorted(wrong_index_guesses))
+        self.wrong_guesses = tuple(sorted(wrong_guesses))
         self.chances_left = chances_left
 
     def __eq__(self, other: object) -> bool:
@@ -249,25 +249,24 @@ class WordleAI:
         return chosen_action
 
     def get_state(self, wordle):
-        data = State(
-            correct_guesses=wordle.guessed_correct,
-            wrong_index_guesses=wordle.guessed_wrong_index,
-            wrong_guesses=wordle.guessed_wrong,
-            chances_left=wordle.chance_remaining,
+        return (
+            tuple(sorted(wordle.correct_guesses)),
+            tuple(sorted(wordle.wrong_index_guesses)),
+            tuple(sorted(wordle.wrong_guesses)),
         )
-        return data
 
-    def get_reward(self, old_state, new_state, win=False, lose=False):
+    def get_reward(self, old_state, new_state, terminal, win=False):
         reward = 0
         reward += (len(new_state.correct_guesses) - len(old_state.correct_guesses)) * 10
         reward += (
             len(new_state.wrong_index_guesses) - len(old_state.wrong_index_guesses)
         ) * 5
         reward -= (len(new_state.wrong_guesses) - len(old_state.wrong_guesses)) * 5
-        if win:
-            reward += 100
-        if lose:
-            reward -= 100
+        if terminal:
+            if win:
+                reward += 100
+            else:
+                reward -= 100
         return reward
 
 
@@ -286,8 +285,8 @@ def train_ai(n):
             reward = ai.get_reward(
                 old_state,
                 new_state,
+                terminal=wordle.terminal,
                 win=wordle.win,
-                lose=wordle.terminal and not wordle.win,
             )
 
             ai.update(old_state, guess, new_state, reward)
