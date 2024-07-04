@@ -115,40 +115,6 @@ class Wordle:
         return False
 
 
-class State:
-    def __init__(
-        self, correct_guesses, wrong_index_guesses, wrong_guesses, chances_left
-    ):
-        self.correct_guesses = tuple(sorted(correct_guesses))
-        self.wrong_index_guesses = tuple(sorted(wrong_index_guesses))
-        self.wrong_guesses = tuple(sorted(wrong_guesses))
-        self.chances_left = chances_left
-
-    def __eq__(self, other: object) -> bool:
-        return (
-            self.correct_guesses == other.correct_guesses
-            and self.wrong_index_guesses == other.wrong_index_guesses
-            and self.wrong_guesses == other.wrong_guesses
-            and self.chances_left == other.chances_left
-        )
-
-    def __hash__(self) -> int:
-        return hash(
-            (
-                self.correct_guesses,
-                self.wrong_index_guesses,
-                self.wrong_guesses,
-                self.chances_left,
-            )
-        )
-
-    def __str__(self) -> str:
-        return (
-            f"CG: {''.join(self.correct_guesses)}; WI: {''.join(self.wrong_index_guesses)}; "
-            f"WG: {''.join(self.wrong_guesses)}; Chances Left: {self.chances_left}"
-        )
-
-
 class WordleAI:
     def __init__(self, alpha=0.5, epsilon=0.1) -> None:
         self.q = dict()
