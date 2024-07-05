@@ -163,7 +163,10 @@ class WordleAI:
         )
 
     def choose_action(self):
-        return self.possible_words[0]
+        if len(self.possible_words) >= 1:
+            return self.possible_words[0]
+        else:
+            return -1
 
     def update_game_state(self, action, result):
         for i in range(5):
@@ -280,6 +283,15 @@ def train_ai(n):
 
 
 def wordle_input(string):
+    print(
+        "B : BLACK",
+        "G : GREEN",
+        "Y : YELLOW",
+        "S : New Game",
+        "R : Word not accepted",
+        "eg: BGBYB",
+        sep="\n",
+    )
     response = input("Response: ").upper()
     formatted_response = []
     for letter in response:
@@ -289,33 +301,81 @@ def wordle_input(string):
             formatted_response.append(Letter.YELLOW)
         elif letter == "G":
             formatted_response.append(Letter.GREEN)
+        elif letter == "R":
+            return -1
+        elif letter == "S":
+            return 1
         else:
             raise ValueError("Invalid Symbol")
     return formatted_response
 
 
 def main():
-    # ai = WordleAI()
-    ai = train_ai(1000)
-
-    wordle = Wordle()
+    ai = WordleAI()
     ai.reset_game_state()
-    i = 1
-    while i:
-        while not wordle.terminal:
+
+    while True:
+        ai.reset_game_state()
+        while True:
             guess = ai.choose_action()
 
-            print("Guess:", guess)
-            # guess = input("Guess:")
-            result = wordle.play(guess)
-            ai.update_game_state(guess, result)
-        # if not wordle.win:
-        #     break
-        # else:
-        #     wordle = Wordle()
-        #     ai.reset_game_state()
+            if guess == -1:
+                print(Fore.RED + "Can't find such a word from the dictionary :/")
+                print(
+                    Fore.GREEN
+                    + "Perhaps updating my dictionary with this word would help"
+                )
+                break
 
-        i -= 1
+            print("Guess:", guess)
+            try:
+                result = wordle_input(guess)
+            except ValueError:
+                return
+            if result == -1:
+                ai.possible_words.remove(guess)
+                continue
+            elif result == 1:
+                print("Starting new game")
+                break
+
+            ai.update_game_state(guess, result)
+
+
+# def main():
+#     ai = WordleAI()
+#     # ai = train_ai(1000)
+
+#     # wordle = Wordle()
+#     ai.reset_game_state()
+#     i = 1
+#     while True:
+#         while not wordle.terminal:
+#             guess = ai.choose_action()
+
+#             if guess == -1:
+#                 print(Fore.RED + "Can't find such a word from the dictionary :/")
+#                 print(
+#                     Fore.GREEN
+#                     + "Perhaps updating my dictionary with this word would help"
+#                 )
+
+#             print("Guess:", guess)
+
+#             # guess = input("Guess:")
+#             result = wordle_input(guess)
+#             if result == -1:
+#                 ai.possible_words.remove(guess)
+
+#             # result = wordle.play(guess)
+#             ai.update_game_state(guess, result)
+#         if not wordle.win:
+#             break
+#         else:
+#             wordle = Wordle()
+#             ai.reset_game_state()
+
+#         i -= 1
 
 
 main()
