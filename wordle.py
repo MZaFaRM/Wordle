@@ -38,7 +38,7 @@ class Wordle:
         if self.verbose:
             print(Fore.YELLOW + "Dictionary loaded")
         self.word = random.choice(self.words)
-        # self.word = "abhor"
+        # self.word = "abate"
 
         if self.verbose:
             print(Fore.YELLOW + "Welcome to Wordle!")
@@ -124,138 +124,64 @@ class Wordle:
 
 
 class WordleAI:
-    def __init__(
-        self, alpha=0.5, epsilon=0.3, epsilon_decay=0.99, min_epsilon=0.1
-    ) -> None:
-        self.q = dict()
-        self.alpha = alpha
-        self.epsilon = epsilon
-        self.epsilon_decay = epsilon_decay
-        self.min_epsilon = min_epsilon
-        self.possible_words = ALL_WORDS
+    def __init__(self) -> None:
+        self.sorted_words = self.sort_words(ALL_WORDS)
+        self.possible_words = self.sorted_words
+        self.game_state = [list(ascii_lowercase) for _ in range(5)]
 
-        # 0: correct guesses        GREEN
-        # 1: wrong index guesses    YELLOW
-        # 2: wrong guesses          BLACK
-        self.game_state = (("", "", "", "", ""), (), ())
+    def sort_words(self, words, known_letters=[]):
+        letter_distribution = self.get_letter_distribution(words)
+        words = {word: 0 for word in words}
+        for word in words:
+            word_score = 0
+            normalized_word = list(set(word))
+            for letter in normalized_word:
+                word_score += letter_distribution.index(letter) + 1
+            words[word] = word_score
 
-    def update(self, old_state, action, new_state, reward):
-        old = self.get_q_value(old_state, action)
-        best_future = self.best_future_reward(new_state)
-        self.update_q_value(old_state, action, old, reward, best_future)
-        return
+        return list(sorted(words.keys(), key=lambda word: words[word], reverse=True))
 
-    def get_q_value(self, state, action):
-        return self.q.get((state, action), 0)
+    def get_letter_distribution(self, words):
+        letter_distribution = {}
+        for word in words:
+            for letter in word:
+                letter_distribution[letter] = letter_distribution.get(letter, 0) + 1
 
-    def update_q_value(self, state, action, old_q, reward, future_rewards):
-        self.q[(state, action)] = old_q + self.alpha * (
-            (future_rewards + reward) - self.get_q_value(state, action)
+        return sorted(
+            letter_distribution.keys(),
+            key=lambda letter: letter_distribution[letter],
         )
 
-    def best_future_reward(self, state):
-        best_reward = 0
-        for (curr_state, _), q_value in self.q.items():
-            if curr_state == state:
-                if q_value > best_reward:
-                    best_reward = q_value
-        return best_reward
+    def choose_action(self):
 
-    def choose_action(self, state, epsilon=True):
+        return self.possible_words[0]
 
-        global ALL_WORDS
-
-        best_action = ""
-        best_value = -float("inf")
-        for curr_state, curr_action in self.q.keys():
-            if curr_state == state:
-                if best_value < self.q[(curr_state, curr_action)]:
-                    best_value = self.q[(curr_state, curr_action)]
-                    best_action = curr_action
-
-        # random_action = random.choice(ALL_WORDS)
-        random_action = random.choice(ALL_WORDS)
-
-        if best_action == "":
-            return random_action
-
-        if epsilon:
-            chosen_action = random.choices(
-                [best_action, random_action], weights=[1 - self.epsilon, self.epsilon]
-            )[0]
-        else:
-            chosen_action = best_action
-
-        return chosen_action
-
-    def update_game_state(self, action, result, wordle):
-        green_states = list(self.game_state[0])
-
-        for i in range(len(action)):
+    def update_game_state(self, action, result):
+        for i in range(5):
             if result[i] == Letter.GREEN:
-                green_states[i] = action[i]
+                self.game_state[i] = [action[i]]
             elif result[i] == Letter.YELLOW:
-                yellow_states.add(action[i])
+                with contextlib.suppress(ValueError):
+                    self.game_state[i].remove(action[i])
             elif result[i] == Letter.BLACK:
-                black_states.add(action[i])
+                for j in range(5):
+                    with contextlib.suppress(ValueError):
+                        self.game_state[j].remove(action[i])
 
-        self.game_state = (
-            tuple(green_states),
-            tuple(sorted(yellow_states)),
-            tuple(sorted(black_states)),
+        regex = r""
+        for possible_letters in self.game_state:
+            regex += "["
+            for letter in possible_letters:
+                regex += letter
+            regex += "]"
+
+        self.possible_words = self.sort_words(
+            [word for word in self.possible_words if re.match(regex, word)]
         )
-
-        old_possible_words = self.possible_words
-        wrong_letters = "".join(list(self.game_state[2]))
-        regex = "".join(
-            [
-                rf"[^{wrong_letters}]" if letter == "" else letter
-                for letter in list(self.game_state[0])
-            ]
-        )
-        new_possible_words = [
-            word for word in old_possible_words if re.match(regex, word)
-        ]
-
-        self.possible_words = new_possible_words
-
-    def get_game_state(self):
-        return self.possible_words
 
     def reset_game_state(self):
-        self.game_state = (("", "", "", "", ""), (), ())
-        self.possible_words = ALL_WORDS
-
-    def get_reward(self, old_state, new_state, terminal, win=False):
-        reward = 0
-        # 0: correct guesses        GREEN
-        # 1: wrong index guesses    YELLOW
-        # 2: wrong guesses          BLACK
-
-        # reward is calculated based on knowledge gained
-        # new_green_states = new_state[0]
-        # new_yellow_states = new_state[1]
-        # new_black_states = new_state[2]
-
-        # old_green_states = old_state[0]
-        # old_yellow_states = old_state[1]
-        # old_black_states = old_state[2]
-
-        # # Set is used to not let green states cancel each other out with their '' values
-        # reward += (len(set(new_green_states)) - len(set(old_green_states))) * 20
-        # reward += (len(new_yellow_states) - len(old_yellow_states)) * 10
-        # reward += (len(new_black_states) - len(old_black_states)) * 1
-
-        reward = len(old_possible_words) - len(new_possible_words)
-
-        self.possible_words = new_possible_words
-
-        if terminal:
-            if win:
-                reward += 100
-            else:
-                reward -= 100
-        return reward
+        self.possible_words = self.sorted_words
+        self.game_state = [list(ascii_lowercase) for _ in range(5)]
 
 
 class DQNGraph:
@@ -302,36 +228,20 @@ def train_ai(n):
 
     words = {}
 
-    f = open("words_tried.txt", "w")
-
-    for i in range(n):
+    for i in range(1, n + 1):
         print("Playing game " + str(i))
         wordle = Wordle(verbose=False)
         ai.reset_game_state()
 
         while not wordle.terminal:
-            old_state = ai.get_game_state()
-            guess = ai.choose_action(old_state, epsilon=True)
+            guess = ai.choose_action(wordle)
 
             result = wordle.play(guess)
-            f.write(guess + "\t")
-            ai.update_game_state(guess, result, wordle.word)
-            new_state = ai.get_game_state()
-            reward = ai.get_reward(
-                old_state,
-                new_state,
-                terminal=wordle.terminal,
-                win=wordle.win,
-            )
-            f.write(f"Old: {str(old_state)} New: {str(new_state)} Reward: {reward}\n")
+            ai.update_game_state(guess, result)
 
             words[(guess, wordle.chance_remaining)] = (
                 words.get((guess, wordle.chance_remaining), 0) + 1
             )
-            ai.update(old_state, guess, new_state, reward)
-
-        if ai.epsilon > ai.min_epsilon:
-            ai.epsilon *= ai.epsilon_decay
 
         if i % 100 == 0:
             graph.draw_graph(games_won, games_lost)
@@ -342,9 +252,6 @@ def train_ai(n):
             games_won += 1
         else:
             games_lost += 1
-
-        f.write("Game Ended.\n")
-    f.close()
 
     with open("used_words.txt", "w") as t:
         words_ordered = sorted(words.keys(), key=lambda word: words[word], reverse=True)
@@ -361,17 +268,23 @@ def train_ai(n):
 
 
 def main():
-    ai = train_ai(10000)
+    ai = WordleAI()
 
     wordle = Wordle()
+    ai.reset_game_state()
+    while True:
+        while not wordle.terminal:
+            guess = ai.choose_action()
 
-    while not wordle.terminal:
-        old_state = ai.get_game_state()
-        guess = ai.choose_action(old_state)
-
-        print("Guess:", guess)
-        # guess = input("Guess:")
-        wordle.play(guess)
+            print("Guess:", guess)
+            # guess = input("Guess:")
+            result = wordle.play(guess)
+            ai.update_game_state(guess, result)
+        if not wordle.win:
+            break
+        else:
+            wordle = Wordle()
+            ai.reset_game_state()
 
 
 main()
