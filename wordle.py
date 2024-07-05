@@ -34,11 +34,14 @@ class Wordle:
         self.chance_remaining = 6
         self.verbose = verbose
 
+        self.correct_guesses = set()
+        self.wrong_index_guesses = set()
+        self.wrong_guesses = set()
+
         self.words = ALL_WORDS
         if self.verbose:
             print(Fore.YELLOW + "Dictionary loaded")
         self.word = random.choice(self.words)
-        # self.word = "abate"
 
         if self.verbose:
             print(Fore.YELLOW + "Welcome to Wordle!")
@@ -78,15 +81,15 @@ class Wordle:
                 )
 
             output.append("\n")
-            # for i in ascii_lowercase:
-            #     if i in self.correct_guesses:
-            #         output.append(Fore.GREEN + i)
-            #     elif i in self.wrong_index_guesses:
-            #         output.append(Fore.YELLOW + i)
-            #     elif i in self.wrong_guesses:
-            #         output.append(Fore.BLACK + i)
-            #     else:
-            #         output.append(Fore.WHITE + i)
+            for i in ascii_lowercase:
+                if i in self.correct_guesses:
+                    output.append(Fore.GREEN + i)
+                elif i in self.wrong_index_guesses:
+                    output.append(Fore.YELLOW + i)
+                elif i in self.wrong_guesses:
+                    output.append(Fore.BLACK + i)
+                else:
+                    output.append(Fore.WHITE + i)
 
             print("".join(output))
 
@@ -127,10 +130,12 @@ class WordleAI:
     def __init__(self) -> None:
         self.sorted_words = self.sort_words(ALL_WORDS)
         self.possible_words = self.sorted_words
-        self.game_state = [list(ascii_lowercase) for _ in range(5)]
+        self.game_state = [[list(ascii_lowercase) for _ in range(5)], []]
 
-    def sort_words(self, words, known_letters=[]):
-        letter_distribution = self.get_letter_distribution(words)
+    def sort_words(self, words, known_letters=None):
+        letter_distribution = self.get_letter_distribution(
+            words, known_letters=known_letters
+        )
         words = {word: 0 for word in words}
         for word in words:
             word_score = 0
@@ -141,11 +146,16 @@ class WordleAI:
 
         return list(sorted(words.keys(), key=lambda word: words[word], reverse=True))
 
-    def get_letter_distribution(self, words):
+    def get_letter_distribution(self, words, known_letters=None):
         letter_distribution = {}
+        if not known_letters:
+            known_letters = []
         for word in words:
             for letter in word:
-                letter_distribution[letter] = letter_distribution.get(letter, 0) + 1
+                if letter not in known_letters:
+                    letter_distribution[letter] = letter_distribution.get(letter, 0) + 1
+                else:
+                    letter_distribution[letter] = float("inf")
 
         return sorted(
             letter_distribution.keys(),
@@ -153,35 +163,37 @@ class WordleAI:
         )
 
     def choose_action(self):
-
         return self.possible_words[0]
 
     def update_game_state(self, action, result):
         for i in range(5):
             if result[i] == Letter.GREEN:
-                self.game_state[i] = [action[i]]
+                self.game_state[0][i] = [action[i]]
             elif result[i] == Letter.YELLOW:
+                if action[i] not in self.game_state[1]:
+                    self.game_state[1].append(action[i])
                 with contextlib.suppress(ValueError):
-                    self.game_state[i].remove(action[i])
+                    self.game_state[0][i].remove(action[i])
             elif result[i] == Letter.BLACK:
                 for j in range(5):
                     with contextlib.suppress(ValueError):
-                        self.game_state[j].remove(action[i])
+                        self.game_state[0][j].remove(action[i])
 
         regex = r""
-        for possible_letters in self.game_state:
+        for possible_letters in self.game_state[0]:
             regex += "["
             for letter in possible_letters:
                 regex += letter
             regex += "]"
 
         self.possible_words = self.sort_words(
-            [word for word in self.possible_words if re.match(regex, word)]
+            [word for word in self.possible_words if re.match(regex, word)],
+            known_letters=self.game_state[1],
         )
 
     def reset_game_state(self):
         self.possible_words = self.sorted_words
-        self.game_state = [list(ascii_lowercase) for _ in range(5)]
+        self.game_state = [[list(ascii_lowercase) for _ in range(5)], []]
 
 
 class DQNGraph:
@@ -234,7 +246,7 @@ def train_ai(n):
         ai.reset_game_state()
 
         while not wordle.terminal:
-            guess = ai.choose_action(wordle)
+            guess = ai.choose_action()
 
             result = wordle.play(guess)
             ai.update_game_state(guess, result)
@@ -267,12 +279,29 @@ def train_ai(n):
     return ai
 
 
+def wordle_input(string):
+    response = input("Response: ").upper()
+    formatted_response = []
+    for letter in response:
+        if letter == "B":
+            formatted_response.append(Letter.BLACK)
+        elif letter == "Y":
+            formatted_response.append(Letter.YELLOW)
+        elif letter == "G":
+            formatted_response.append(Letter.GREEN)
+        else:
+            raise ValueError("Invalid Symbol")
+    return formatted_response
+
+
 def main():
-    ai = WordleAI()
+    # ai = WordleAI()
+    ai = train_ai(1000)
 
     wordle = Wordle()
     ai.reset_game_state()
-    while True:
+    i = 1
+    while i:
         while not wordle.terminal:
             guess = ai.choose_action()
 
@@ -280,11 +309,13 @@ def main():
             # guess = input("Guess:")
             result = wordle.play(guess)
             ai.update_game_state(guess, result)
-        if not wordle.win:
-            break
-        else:
-            wordle = Wordle()
-            ai.reset_game_state()
+        # if not wordle.win:
+        #     break
+        # else:
+        #     wordle = Wordle()
+        #     ai.reset_game_state()
+
+        i -= 1
 
 
 main()
