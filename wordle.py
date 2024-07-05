@@ -310,7 +310,7 @@ def wordle_input(string):
     return formatted_response
 
 
-def main():
+def solve():
     ai = WordleAI()
     ai.reset_game_state()
 
@@ -342,40 +342,43 @@ def main():
             ai.update_game_state(guess, result)
 
 
-# def main():
-#     ai = WordleAI()
-#     # ai = train_ai(1000)
+def main():
+    # ai = WordleAI()
+    ai = train_ai(1000)
 
-#     # wordle = Wordle()
-#     ai.reset_game_state()
-#     i = 1
-#     while True:
-#         while not wordle.terminal:
-#             guess = ai.choose_action()
+    wordle = Wordle()
+    ai.reset_game_state()
+    i = 1
+    while True:
+        while not wordle.terminal:
+            guess = ai.choose_action()
 
-#             if guess == -1:
-#                 print(Fore.RED + "Can't find such a word from the dictionary :/")
-#                 print(
-#                     Fore.GREEN
-#                     + "Perhaps updating my dictionary with this word would help"
-#                 )
+            if guess == -1:
+                print(Fore.RED + "Can't find such a word from the dictionary :/")
+                print(
+                    Fore.GREEN
+                    + "Perhaps updating my dictionary with this word would help"
+                )
 
-#             print("Guess:", guess)
+            print("Guess:", guess)
 
-#             # guess = input("Guess:")
-#             result = wordle_input(guess)
-#             if result == -1:
-#                 ai.possible_words.remove(guess)
+            # guess = input("Guess:")
+            result = wordle_input(guess)
+            if result == -1:
+                ai.possible_words.remove(guess)
 
-#             # result = wordle.play(guess)
-#             ai.update_game_state(guess, result)
-#         if not wordle.win:
-#             break
-#         else:
-#             wordle = Wordle()
-#             ai.reset_game_state()
+            # result = wordle.play(guess)
+            ai.update_game_state(guess, result)
+        if not wordle.win:
+            break
+        else:
+            wordle = Wordle()
+            ai.reset_game_state()
 
-#         i -= 1
+        i -= 1
 
-
-main()
+mode = input('Solve (s) or Train (t):').lower()
+if mode == 's':
+    solve()
+else:
+    main()
